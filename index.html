@@ -352,7 +352,7 @@
         scene.add(satelliteObjects);
         
         const categories = {
-            'ISS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', color: 0x00ff00, emissive: 0x00ff00, visible: true },
+            'ISS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', color: 0x00ff00, emissive: 0x00ff00, visible: true, filterISS: true },
             'Starlink': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle', color: 0xff3300, emissive: 0xff3300, visible: true },
             'GPS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle', color: 0x00ddff, emissive: 0x0088ff, visible: true },
             'Weather': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle', color: 0xffff00, emissive: 0xffff00, visible: true },
@@ -387,11 +387,16 @@
                     const tleData = await response.text();
                     const sats = parseTLE(tleData);
                     
-                    // No limit - load all satellites!
-                    const limit = sats.length;
+                    let categoryCount = 0;
                     
-                    for (let i = 0; i < limit; i++) {
+                    for (let i = 0; i < sats.length; i++) {
                         const sat = sats[i];
+                        
+                        // Filter for ISS only if filterISS flag is set
+                        if (config.filterISS && !sat.name.includes('ISS (ZARYA)')) {
+                            continue;
+                        }
+                        
                         const satrec = satellite.twoline2satrec(sat.tle1, sat.tle2);
                         
                         // Larger spheres for easier clicking on mobile
@@ -415,10 +420,11 @@
                         });
                         
                         satelliteObjects.add(mesh);
+                        categoryCount++;
                     }
                     
-                    config.count = limit;
-                    totalLoaded += limit;
+                    config.count = categoryCount;
+                    totalLoaded += categoryCount;
                     
                 } catch (error) {
                     console.error(`Failed to load ${category}:`, error);
