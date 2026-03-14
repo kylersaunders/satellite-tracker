@@ -1,0 +1,12 @@
+{
+  "name": "satellite-tracker",
+  "version": "1.0.0",
+  "description": "Live 3D satellite tracker with real-time orbital data",
+  "scripts": {
+    "dev": "python3 -m http.server 8000",
+    "deploy": "vercel deploy --prod"
+  },
+  "keywords": ["satellites", "three.js", "space", "orbital-mechanics", "visualization"],
+  "author": "Marshall",
+  "license": "MIT"
+}
