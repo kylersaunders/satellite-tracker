@@ -90,6 +90,56 @@
             opacity: 0.9;
         }
         
+        .control-group {
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+        }
+        
+        .control-group h3 {
+            font-size: 14px;
+            color: #4CAF50;
+            margin-bottom: 8px;
+        }
+        
+        .speed-buttons {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .speed-btn {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            color: #4CAF50;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        
+        .speed-btn.active {
+            background: #4CAF50;
+            color: #000;
+        }
+        
+        .speed-btn:hover {
+            background: rgba(76, 175, 80, 0.4);
+        }
+        
+        .toggle-option {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 12px;
+        }
+        
+        .toggle-option input {
+            margin-right: 8px;
+        }
+        
         #satellite-info {
             position: absolute;
             bottom: 20px;
@@ -228,6 +278,24 @@
         <p><strong>Drag</strong> to rotate | <strong>Scroll</strong> to zoom | <strong>Tap</strong> satellite for info</p>
         <div id="satellite-count">Loading satellites...</div>
         
+        <div class="control-group">
+            <h3>⚡ Time Speed</h3>
+            <div class="speed-buttons">
+                <button class="speed-btn active" data-speed="1">1x Real</button>
+                <button class="speed-btn" data-speed="10">10x</button>
+                <button class="speed-btn" data-speed="100">100x</button>
+                <button class="speed-btn" data-speed="1000">1000x</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <h3>🎨 Display</h3>
+            <div class="toggle-option">
+                <input type="checkbox" id="show-orbits">
+                <label for="show-orbits">Show Orbital Paths</label>
+            </div>
+        </div>
+        
         <div id="categories"></div>
     </div>
     
@@ -363,6 +431,13 @@
         const satelliteObjects = new THREE.Group();
         scene.add(satelliteObjects);
         
+        const orbitalPaths = new THREE.Group();
+        scene.add(orbitalPaths);
+        
+        let timeMultiplier = 1;
+        let showOrbits = false;
+        let simulationTime = new Date();
+        
         const categories = {
             'ISS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', color: 0x00ff00, emissive: 0x00ff00, visible: true, filterISS: true },
             'Starlink': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle', color: 0xff3300, emissive: 0xff3300, visible: true },
@@ -415,21 +490,55 @@
                         const baseSize = category === 'ISS' ? 150 : 80;
                         const geometry = new THREE.SphereGeometry(baseSize, 8, 8);
                         
-                        // Create material with proper color initialization
+                        // Create material with proper color - fix color initialization bug
+                        const satColor = new THREE.Color(config.color);
                         const material = new THREE.MeshBasicMaterial({ 
-                            color: new THREE.Color(config.color),
-                            transparent: false,
-                            opacity: 1.0
+                            color: satColor.clone()
                         });
                         const mesh = new THREE.Mesh(geometry, material);
                         
-                        // Store the intended color explicitly
-                        mesh.userData.categoryColor = config.color;
+                        // Create orbital path (hidden by default)
+                        const orbitPoints = [];
+                        const now = new Date();
+                        
+                        // Calculate orbit points (1 full orbit, 90 points)
+                        const period = satrec.no ? (2 * Math.PI / satrec.no) : 90; // period in minutes
+                        const steps = 90;
+                        
+                        for (let step = 0; step < steps; step++) {
+                            const timeOffset = (period / steps) * step;
+                            const futureTime = new Date(now.getTime() + timeOffset * 60000);
+                            const pv = satellite.propagate(satrec, futureTime);
+                            
+                            if (pv.position && !pv.position.error) {
+                                orbitPoints.push(new THREE.Vector3(
+                                    pv.position.x,
+                                    pv.position.y,
+                                    pv.position.z
+                                ));
+                            }
+                        }
+                        
+                        // Close the orbit loop
+                        if (orbitPoints.length > 0) {
+                            orbitPoints.push(orbitPoints[0].clone());
+                        }
+                        
+                        const orbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints);
+                        const orbitMaterial = new THREE.LineBasicMaterial({ 
+                            color: satColor.clone(),
+                            transparent: true,
+                            opacity: 0.3
+                        });
+                        const orbitLine = new THREE.Line(orbitGeometry, orbitMaterial);
+                        orbitLine.visible = false;
+                        orbitalPaths.add(orbitLine);
                         
                         satellites.push({
                             name: sat.name,
                             satrec: satrec,
                             mesh: mesh,
+                            orbitLine: orbitLine,
                             category: category,
                             color: config.color
                         });
@@ -495,15 +604,17 @@
         }
         
         // Update satellite positions
-        function updateSatellites() {
-            const now = new Date();
+        function updateSatellites(deltaTime) {
+            // Advance simulation time based on multiplier
+            simulationTime = new Date(simulationTime.getTime() + deltaTime * timeMultiplier);
+            
             const cameraDistance = camera.position.length();
             
             // Scale satellites based on camera distance for better visibility
             const scaleFactor = Math.max(1.0, cameraDistance / 15000);
             
             satellites.forEach(sat => {
-                const positionAndVelocity = satellite.propagate(sat.satrec, now);
+                const positionAndVelocity = satellite.propagate(sat.satrec, simulationTime);
                 
                 if (positionAndVelocity.position && !positionAndVelocity.position.error) {
                     const pos = positionAndVelocity.position;
@@ -513,6 +624,11 @@
                     
                     // Scale satellite based on camera distance
                     sat.mesh.scale.setScalar(scaleFactor);
+                }
+                
+                // Update orbit visibility
+                if (sat.orbitLine) {
+                    sat.orbitLine.visible = showOrbits && sat.mesh.visible;
                 }
             });
         }
@@ -604,13 +720,19 @@
         }
         
         // Animation loop
+        let lastTime = Date.now();
+        
         function animate() {
             requestAnimationFrame(animate);
+            
+            const now = Date.now();
+            const deltaTime = now - lastTime;
+            lastTime = now;
             
             earth.rotation.y += 0.0001;
             atmosphere.rotation.y += 0.0001;
             
-            updateSatellites();
+            updateSatellites(deltaTime);
             orbitControls.update();
             renderer.render(scene, camera);
         }
@@ -620,6 +742,23 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Speed control buttons
+        document.querySelectorAll('.speed-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                timeMultiplier = parseFloat(btn.dataset.speed);
+                
+                // Reset simulation time to current when changing speed
+                simulationTime = new Date();
+            });
+        });
+        
+        // Orbit toggle
+        document.getElementById('show-orbits').addEventListener('change', (e) => {
+            showOrbits = e.target.checked;
         });
         
         // Initialize
