@@ -20,6 +20,18 @@
         }
         
         #canvas-container {
+            cursor: grab;
+        }
+        
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+        
+        #canvas-container.hovering {
+            cursor: pointer;
+        }
+        
+        #canvas-container {
             width: 100vw;
             height: 100vh;
         }
@@ -399,17 +411,20 @@
                         
                         const satrec = satellite.twoline2satrec(sat.tle1, sat.tle2);
                         
-                        // Larger spheres for easier clicking on mobile
-                        const baseSize = category === 'ISS' ? 80 : 40;
+                        // Larger spheres for easier clicking - doubled base sizes
+                        const baseSize = category === 'ISS' ? 150 : 80;
                         const geometry = new THREE.SphereGeometry(baseSize, 8, 8);
                         
-                        // Use MeshBasicMaterial with emissive-like effect for better visibility
+                        // Create material with proper color initialization
                         const material = new THREE.MeshBasicMaterial({ 
-                            color: config.color,
-                            transparent: true,
-                            opacity: 0.9
+                            color: new THREE.Color(config.color),
+                            transparent: false,
+                            opacity: 1.0
                         });
                         const mesh = new THREE.Mesh(geometry, material);
+                        
+                        // Store the intended color explicitly
+                        mesh.userData.categoryColor = config.color;
                         
                         satellites.push({
                             name: sat.name,
@@ -472,12 +487,20 @@
         function updateSatelliteVisibility() {
             satellites.forEach(sat => {
                 sat.mesh.visible = categories[sat.category].visible;
+                // Ensure color is correct when toggling visibility
+                if (sat.mesh.visible && sat.mesh.userData.categoryColor) {
+                    sat.mesh.material.color.setHex(sat.mesh.userData.categoryColor);
+                }
             });
         }
         
         // Update satellite positions
         function updateSatellites() {
             const now = new Date();
+            const cameraDistance = camera.position.length();
+            
+            // Scale satellites based on camera distance for better visibility
+            const scaleFactor = Math.max(1.0, cameraDistance / 15000);
             
             satellites.forEach(sat => {
                 const positionAndVelocity = satellite.propagate(sat.satrec, now);
@@ -487,6 +510,9 @@
                     sat.mesh.position.set(pos.x, pos.y, pos.z);
                     sat.position = pos;
                     sat.velocity = positionAndVelocity.velocity;
+                    
+                    // Scale satellite based on camera distance
+                    sat.mesh.scale.setScalar(scaleFactor);
                 }
             });
         }
@@ -496,11 +522,14 @@
         // Increase raycaster threshold for easier mobile clicking
         raycaster.params.Points.threshold = 100;
         const mouse = new THREE.Vector2();
+        const canvasContainer = document.getElementById('canvas-container');
         
-        function onPointerDown(event) {
+        function updatePointer(event) {
             // Handle both mouse and touch events
             const x = event.clientX || (event.touches && event.touches[0].clientX);
             const y = event.clientY || (event.touches && event.touches[0].clientY);
+            
+            if (x === undefined || y === undefined) return;
             
             mouse.x = (x / window.innerWidth) * 2 - 1;
             mouse.y = -(y / window.innerHeight) * 2 + 1;
@@ -513,16 +542,34 @@
             
             const intersects = raycaster.intersectObjects(visibleSatellites);
             
+            // Update cursor
             if (intersects.length > 0) {
-                const sat = satellites.find(s => s.mesh === intersects[0].object);
+                canvasContainer.classList.add('hovering');
+                return intersects[0];
+            } else {
+                canvasContainer.classList.remove('hovering');
+                return null;
+            }
+        }
+        
+        function onPointerDown(event) {
+            const intersect = updatePointer(event);
+            
+            if (intersect) {
+                const sat = satellites.find(s => s.mesh === intersect.object);
                 showSatelliteInfo(sat);
             } else {
                 document.getElementById('satellite-info').style.display = 'none';
             }
         }
         
+        function onPointerMove(event) {
+            updatePointer(event);
+        }
+        
         renderer.domElement.addEventListener('click', onPointerDown);
         renderer.domElement.addEventListener('touchstart', onPointerDown);
+        renderer.domElement.addEventListener('mousemove', onPointerMove);
         
         // Show satellite info
         function showSatelliteInfo(sat) {
