@@ -45,11 +45,11 @@
         }
         
         #menu-toggle {
-            position: absolute;
-            top: 20px;
-            left: 20px;
+            position: fixed;
+            top: 15px;
+            right: 15px;
             background: rgba(0, 0, 0, 0.9);
-            border: none;
+            border: 2px solid #4CAF50;
             color: #4CAF50;
             font-size: 24px;
             padding: 12px 16px;
@@ -57,11 +57,12 @@
             cursor: pointer;
             z-index: 101;
             backdrop-filter: blur(10px);
-            transition: left 0.3s ease;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
         }
         
-        #menu-toggle.menu-open {
-            left: 340px;
+        #menu-toggle:active {
+            transform: scale(0.95);
         }
         
         #controls h1 {
@@ -153,6 +154,15 @@
             cursor: pointer;
         }
         
+        .color-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            display: inline-block;
+            box-shadow: 0 0 8px currentColor;
+        }
+        
         .count {
             margin-left: auto;
             opacity: 0.6;
@@ -169,12 +179,10 @@
             }
             
             #menu-toggle {
-                left: 10px;
+                right: 10px;
                 top: 10px;
-            }
-            
-            #menu-toggle.menu-open {
-                left: 300px;
+                font-size: 22px;
+                padding: 10px 14px;
             }
             
             #controls.collapsed {
@@ -344,11 +352,11 @@
         scene.add(satelliteObjects);
         
         const categories = {
-            'ISS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', color: 0x00ff00, visible: true },
-            'Starlink': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle', color: 0xff6600, visible: true },
-            'GPS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle', color: 0x0088ff, visible: true },
-            'Weather': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle', color: 0xffff00, visible: true },
-            'Communications': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle', color: 0xff00ff, visible: false }
+            'ISS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', color: 0x00ff00, emissive: 0x00ff00, visible: true },
+            'Starlink': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle', color: 0xff3300, emissive: 0xff3300, visible: true },
+            'GPS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle', color: 0x00ddff, emissive: 0x0088ff, visible: true },
+            'Weather': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle', color: 0xffff00, emissive: 0xffff00, visible: true },
+            'Communications': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle', color: 0xff00ff, emissive: 0xff00ff, visible: false }
         };
         
         // Parse TLE data
@@ -389,7 +397,13 @@
                         // Larger spheres for easier clicking on mobile
                         const baseSize = category === 'ISS' ? 80 : 40;
                         const geometry = new THREE.SphereGeometry(baseSize, 8, 8);
-                        const material = new THREE.MeshBasicMaterial({ color: config.color });
+                        
+                        // Use MeshBasicMaterial with emissive-like effect for better visibility
+                        const material = new THREE.MeshBasicMaterial({ 
+                            color: config.color,
+                            transparent: true,
+                            opacity: 0.9
+                        });
                         const mesh = new THREE.Mesh(geometry, material);
                         
                         satellites.push({
@@ -426,9 +440,14 @@
             for (const [name, config] of Object.entries(categories)) {
                 const div = document.createElement('div');
                 div.className = 'satellite-category';
+                
+                // Convert hex color to CSS
+                const colorHex = '#' + config.color.toString(16).padStart(6, '0');
+                
                 div.innerHTML = `
                     <label>
                         <input type="checkbox" ${config.visible ? 'checked' : ''} data-category="${name}">
+                        <span class="color-indicator" style="background-color: ${colorHex}; color: ${colorHex};"></span>
                         <span>${name}</span>
                         <span class="count">${config.count || 0}</span>
                     </label>
