@@ -140,6 +140,51 @@
             margin-right: 8px;
         }
         
+        .slider-control {
+            margin: 10px 0;
+        }
+        
+        .slider-control label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+        
+        .slider-control input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: rgba(76, 175, 80, 0.3);
+            outline: none;
+            border-radius: 2px;
+        }
+        
+        .slider-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #4CAF50;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        
+        .slider-control input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #4CAF50;
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+        
+        .slider-value {
+            display: inline-block;
+            font-size: 11px;
+            color: #4CAF50;
+            margin-left: 5px;
+        }
+        
         #satellite-info {
             position: absolute;
             bottom: 20px;
@@ -290,6 +335,12 @@
         
         <div class="control-group">
             <h3>🎨 Display</h3>
+            <div class="slider-control">
+                <label>
+                    Satellite Size <span class="slider-value" id="size-value">50%</span>
+                </label>
+                <input type="range" id="satellite-size" min="10" max="200" value="50" step="10">
+            </div>
             <div class="toggle-option">
                 <input type="checkbox" id="show-orbits">
                 <label for="show-orbits">Show Orbital Paths</label>
@@ -438,12 +489,14 @@
         let showOrbits = false;
         let simulationTime = new Date();
         
+        let satelliteScale = 0.5; // Global size multiplier (default 50%)
+        
         const categories = {
             'ISS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', color: 0x00ff00, emissive: 0x00ff00, visible: true, filterISS: true },
             'Starlink': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle', color: 0xff3300, emissive: 0xff3300, visible: true },
             'GPS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=tle', color: 0x00ddff, emissive: 0x0088ff, visible: true },
             'Weather': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle', color: 0xffff00, emissive: 0xffff00, visible: true },
-            'Communications': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle', color: 0xff00ff, emissive: 0xff00ff, visible: false }
+            'Communications': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle', color: 0xff00ff, emissive: 0xff00ff, visible: false, filterStarlink: true }
         };
         
         // Parse TLE data
@@ -484,10 +537,15 @@
                             continue;
                         }
                         
+                        // Filter out Starlink from Communications category
+                        if (config.filterStarlink && sat.name.toUpperCase().includes('STARLINK')) {
+                            continue;
+                        }
+                        
                         const satrec = satellite.twoline2satrec(sat.tle1, sat.tle2);
                         
-                        // Larger spheres for easier clicking - doubled base sizes
-                        const baseSize = category === 'ISS' ? 150 : 80;
+                        // Smaller base sizes (ISS is special, others are small)
+                        const baseSize = category === 'ISS' ? 100 : 30;
                         const geometry = new THREE.SphereGeometry(baseSize, 8, 8);
                         
                         // Create material with proper color - fix color initialization bug
@@ -611,7 +669,7 @@
             const cameraDistance = camera.position.length();
             
             // Scale satellites based on camera distance for better visibility
-            const scaleFactor = Math.max(1.0, cameraDistance / 15000);
+            const distanceScale = Math.max(1.0, cameraDistance / 15000);
             
             satellites.forEach(sat => {
                 const positionAndVelocity = satellite.propagate(sat.satrec, simulationTime);
@@ -622,8 +680,9 @@
                     sat.position = pos;
                     sat.velocity = positionAndVelocity.velocity;
                     
-                    // Scale satellite based on camera distance
-                    sat.mesh.scale.setScalar(scaleFactor);
+                    // Apply both user scale and distance scale
+                    const finalScale = distanceScale * satelliteScale;
+                    sat.mesh.scale.setScalar(finalScale);
                 }
                 
                 // Update orbit visibility
@@ -754,6 +813,13 @@
                 // Reset simulation time to current when changing speed
                 simulationTime = new Date();
             });
+        });
+        
+        // Size slider
+        document.getElementById('satellite-size').addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            satelliteScale = value / 100; // Convert percentage to decimal
+            document.getElementById('size-value').textContent = value + '%';
         });
         
         // Orbit toggle
