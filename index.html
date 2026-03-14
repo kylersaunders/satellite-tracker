@@ -15,6 +15,8 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #000;
             overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
         }
         
         #canvas-container {
@@ -26,12 +28,40 @@
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             padding: 20px;
             border-radius: 10px;
             color: #fff;
             max-width: 300px;
             backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            z-index: 100;
+        }
+        
+        #controls.collapsed {
+            transform: translateX(-320px);
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        #menu-toggle {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: none;
+            color: #4CAF50;
+            font-size: 24px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 101;
+            backdrop-filter: blur(10px);
+            transition: left 0.3s ease;
+        }
+        
+        #menu-toggle.menu-open {
+            left: 340px;
         }
         
         #controls h1 {
@@ -51,13 +81,14 @@
             position: absolute;
             bottom: 20px;
             left: 20px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             padding: 15px;
             border-radius: 10px;
             color: #fff;
             max-width: 350px;
             backdrop-filter: blur(10px);
             display: none;
+            z-index: 99;
         }
         
         #satellite-info h3 {
@@ -85,6 +116,7 @@
             color: #4CAF50;
             font-size: 18px;
             text-align: center;
+            z-index: 1000;
         }
         
         .spinner {
@@ -118,6 +150,7 @@
         
         .satellite-category input {
             margin-right: 8px;
+            cursor: pointer;
         }
         
         .count {
@@ -125,14 +158,54 @@
             opacity: 0.6;
             font-size: 11px;
         }
+        
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            #controls {
+                max-width: 280px;
+                left: 10px;
+                top: 10px;
+                padding: 15px;
+            }
+            
+            #menu-toggle {
+                left: 10px;
+                top: 10px;
+            }
+            
+            #menu-toggle.menu-open {
+                left: 300px;
+            }
+            
+            #controls.collapsed {
+                transform: translateX(-300px);
+            }
+            
+            #satellite-info {
+                left: 10px;
+                bottom: 10px;
+                right: 10px;
+                max-width: none;
+            }
+            
+            #controls h1 {
+                font-size: 18px;
+            }
+            
+            #controls p {
+                font-size: 12px;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="canvas-container"></div>
     
-    <div id="controls">
+    <button id="menu-toggle" aria-label="Toggle menu">☰</button>
+    
+    <div id="controls" class="collapsed">
         <h1>🛰️ Satellite Tracker</h1>
-        <p><strong>Drag</strong> to rotate | <strong>Scroll</strong> to zoom | <strong>Click</strong> satellite for info</p>
+        <p><strong>Drag</strong> to rotate | <strong>Scroll</strong> to zoom | <strong>Tap</strong> satellite for info</p>
         <div id="satellite-count">Loading satellites...</div>
         
         <div id="categories"></div>
@@ -183,6 +256,24 @@
         // Import satellite.js from CDN
         const satellite = await import('https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.es.js');
         
+        // Menu toggle functionality
+        const menuToggle = document.getElementById('menu-toggle');
+        const controls = document.getElementById('controls');
+        let menuOpen = false;
+        
+        menuToggle.addEventListener('click', () => {
+            menuOpen = !menuOpen;
+            if (menuOpen) {
+                controls.classList.remove('collapsed');
+                menuToggle.classList.add('menu-open');
+                menuToggle.textContent = '✕';
+            } else {
+                controls.classList.add('collapsed');
+                menuToggle.classList.remove('menu-open');
+                menuToggle.textContent = '☰';
+            }
+        });
+        
         // Scene setup
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100000);
@@ -195,14 +286,14 @@
         camera.position.z = 15000;
         
         // Orbit controls
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.minDistance = 7000;
-        controls.maxDistance = 50000;
+        const orbitControls = new OrbitControls(camera, renderer.domElement);
+        orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.05;
+        orbitControls.minDistance = 7000;
+        orbitControls.maxDistance = 50000;
         
         // Earth
-        const earthGeometry = new THREE.SphereGeometry(6371, 64, 64); // Earth radius in km
+        const earthGeometry = new THREE.SphereGeometry(6371, 64, 64);
         const earthTexture = new THREE.TextureLoader().load(
             'https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-blue-marble.jpg'
         );
@@ -288,14 +379,16 @@
                     const tleData = await response.text();
                     const sats = parseTLE(tleData);
                     
-                    // Limit Starlink to first 100 to avoid overload
-                    const limit = category === 'Starlink' ? 100 : sats.length;
+                    // No limit - load all satellites!
+                    const limit = sats.length;
                     
-                    for (let i = 0; i < Math.min(limit, sats.length); i++) {
+                    for (let i = 0; i < limit; i++) {
                         const sat = sats[i];
                         const satrec = satellite.twoline2satrec(sat.tle1, sat.tle2);
                         
-                        const geometry = new THREE.SphereGeometry(category === 'ISS' ? 50 : 20, 8, 8);
+                        // Larger spheres for easier clicking on mobile
+                        const baseSize = category === 'ISS' ? 80 : 40;
+                        const geometry = new THREE.SphereGeometry(baseSize, 8, 8);
                         const material = new THREE.MeshBasicMaterial({ color: config.color });
                         const mesh = new THREE.Mesh(geometry, material);
                         
@@ -310,8 +403,8 @@
                         satelliteObjects.add(mesh);
                     }
                     
-                    config.count = Math.min(limit, sats.length);
-                    totalLoaded += config.count;
+                    config.count = limit;
+                    totalLoaded += limit;
                     
                 } catch (error) {
                     console.error(`Failed to load ${category}:`, error);
@@ -375,11 +468,17 @@
         
         // Raycaster for clicking satellites
         const raycaster = new THREE.Raycaster();
+        // Increase raycaster threshold for easier mobile clicking
+        raycaster.params.Points.threshold = 100;
         const mouse = new THREE.Vector2();
         
-        renderer.domElement.addEventListener('click', (event) => {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        function onPointerDown(event) {
+            // Handle both mouse and touch events
+            const x = event.clientX || (event.touches && event.touches[0].clientX);
+            const y = event.clientY || (event.touches && event.touches[0].clientY);
+            
+            mouse.x = (x / window.innerWidth) * 2 - 1;
+            mouse.y = -(y / window.innerHeight) * 2 + 1;
             
             raycaster.setFromCamera(mouse, camera);
             
@@ -395,7 +494,10 @@
             } else {
                 document.getElementById('satellite-info').style.display = 'none';
             }
-        });
+        }
+        
+        renderer.domElement.addEventListener('click', onPointerDown);
+        renderer.domElement.addEventListener('touchstart', onPointerDown);
         
         // Show satellite info
         function showSatelliteInfo(sat) {
@@ -417,8 +519,7 @@
                 );
             }
             
-            // Calculate orbital period (approximate)
-            const period = sat.satrec.no ? (2 * Math.PI / sat.satrec.no) : 0; // in minutes
+            const period = sat.satrec.no ? (2 * Math.PI / sat.satrec.no) : 0;
             
             document.getElementById('sat-name').textContent = sat.name;
             document.getElementById('sat-altitude').textContent = `${altitude} km`;
@@ -434,11 +535,11 @@
         function animate() {
             requestAnimationFrame(animate);
             
-            earth.rotation.y += 0.0001; // Slow Earth rotation
+            earth.rotation.y += 0.0001;
             atmosphere.rotation.y += 0.0001;
             
             updateSatellites();
-            controls.update();
+            orbitControls.update();
             renderer.render(scene, camera);
         }
         
