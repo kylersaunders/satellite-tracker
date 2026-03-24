@@ -1,6 +1,14 @@
 # 🛰️ Satellite Tracker - Live 3D View
 
+[![Deployment](https://img.shields.io/website?url=https%3A%2F%2Fsatellite-tracker-sigma.vercel.app%2F&up_message=live&down_message=down&label=deployment)](https://satellite-tracker-sigma.vercel.app/)
+[![Vercel](https://img.shields.io/badge/platform-Vercel-black?logo=vercel)](https://satellite-tracker-sigma.vercel.app/)
+[![Last Commit](https://img.shields.io/github/last-commit/kylersaunders/satellite-tracker)](https://github.com/kylersaunders/satellite-tracker/commits/main)
+
 Real-time visualization of satellites orbiting Earth using Three.js and live TLE data from CelesTrak.
+
+## Live Demo
+
+Production: https://satellite-tracker-sigma.vercel.app/
 
 ## Features
 
@@ -42,6 +50,10 @@ Just open `index.html` in your browser. Modern browsers may block external resou
 cd satellite-tracker
 vercel deploy
 ```
+
+Or open the current production deployment:
+
+https://satellite-tracker-sigma.vercel.app/
 
 ## Controls
 
