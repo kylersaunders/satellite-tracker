@@ -345,6 +345,23 @@
                 <input type="checkbox" id="show-orbits">
                 <label for="show-orbits">Show Orbital Paths</label>
             </div>
+            <div class="toggle-option">
+                <input type="checkbox" id="show-moon" checked>
+                <label for="show-moon">Show Moon</label>
+            </div>
+            <div class="toggle-option">
+                <input type="checkbox" id="show-moon-orbit">
+                <label for="show-moon-orbit">Show Moon Orbit</label>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>🌕 Artemis II</h3>
+            <p style="font-size:12px;opacity:.85;margin-bottom:8px;">Live Orion tracking is available from NASA's official tracker while we wire a direct in-app feed.</p>
+            <div class="speed-buttons">
+                <button class="speed-btn" id="open-arow">NASA Live</button>
+                <button class="speed-btn" id="open-artemis-live">ArtemisLive</button>
+            </div>
         </div>
         
         <div id="categories"></div>
@@ -484,12 +501,21 @@
         
         const orbitalPaths = new THREE.Group();
         scene.add(orbitalPaths);
+
+        const celestialObjects = new THREE.Group();
+        scene.add(celestialObjects);
         
         let timeMultiplier = 1;
         let showOrbits = false;
         let simulationTime = new Date();
         
         let satelliteScale = 0.5; // Global size multiplier (default 50%)
+
+        let showMoon = true;
+        let showMoonOrbit = false;
+        const moonDistanceKm = 384400;
+        const moonRadiusKm = 1737;
+        const moonOrbitTilt = THREE.MathUtils.degToRad(5.145);
         
         const categories = {
             'ISS': { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', color: 0x00ff00, emissive: 0x00ff00, visible: true, filterISS: true },
@@ -517,6 +543,63 @@
             return sats;
         }
         
+        function julianDate(date) {
+            return date.getTime() / 86400000 + 2440587.5;
+        }
+
+        function getMoonPosition(date) {
+            const jd = julianDate(date);
+            const d = jd - 2451543.5;
+
+            const N = (125.1228 - 0.0529538083 * d) * Math.PI / 180;
+            const i = 5.1454 * Math.PI / 180;
+            const w = (318.0634 + 0.1643573223 * d) * Math.PI / 180;
+            const a = 60.2666 * 6371;
+            const e = 0.0549;
+            const M = (115.3654 + 13.0649929509 * d) * Math.PI / 180;
+
+            const E = M + e * Math.sin(M) * (1.0 + e * Math.cos(M));
+            const xv = a * (Math.cos(E) - e);
+            const yv = a * (Math.sqrt(1.0 - e * e) * Math.sin(E));
+
+            const v = Math.atan2(yv, xv);
+            const r = Math.sqrt(xv * xv + yv * yv);
+
+            const xh = r * (Math.cos(N) * Math.cos(v + w) - Math.sin(N) * Math.sin(v + w) * Math.cos(i));
+            const yh = r * (Math.sin(N) * Math.cos(v + w) + Math.cos(N) * Math.sin(v + w) * Math.cos(i));
+            const zh = r * (Math.sin(v + w) * Math.sin(i));
+
+            return new THREE.Vector3(xh, zh, yh);
+        }
+
+        function createMoonSystem() {
+            const moonGeometry = new THREE.SphereGeometry(moonRadiusKm * 2.8, 24, 24);
+            const moonMaterial = new THREE.MeshPhongMaterial({
+                color: 0xd9d9d9,
+                emissive: 0x222222,
+                shininess: 8
+            });
+            const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
+            moonMesh.userData = { type: 'moon' };
+            celestialObjects.add(moonMesh);
+
+            const orbitPoints = [];
+            const start = new Date();
+            for (let day = 0; day <= 27; day++) {
+                const t = new Date(start.getTime() + day * 24 * 60 * 60 * 1000);
+                orbitPoints.push(getMoonPosition(t));
+            }
+            const moonOrbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints);
+            const moonOrbitMaterial = new THREE.LineBasicMaterial({ color: 0x999999, transparent: true, opacity: 0.35 });
+            const moonOrbitLine = new THREE.LineLoop(moonOrbitGeometry, moonOrbitMaterial);
+            moonOrbitLine.visible = showMoonOrbit;
+            celestialObjects.add(moonOrbitLine);
+
+            return { moonMesh, moonOrbitLine };
+        }
+
+        const moonSystem = createMoonSystem();
+
         // Fetch satellites from CelesTrak
         async function loadSatellites() {
             let totalLoaded = 0;
@@ -731,6 +814,10 @@
             const intersect = updatePointer(event);
             
             if (intersect) {
+                if (intersect.object.userData?.type === 'moon') {
+                    showMoonInfo();
+                    return;
+                }
                 const sat = satellites.find(s => s.mesh === intersect.object);
                 showSatelliteInfo(sat);
             } else {
@@ -746,6 +833,19 @@
         renderer.domElement.addEventListener('touchstart', onPointerDown);
         renderer.domElement.addEventListener('mousemove', onPointerMove);
         
+        function showMoonInfo() {
+            const info = document.getElementById('satellite-info');
+            const moonPos = getMoonPosition(simulationTime);
+            const distance = Math.round(moonPos.length());
+            document.getElementById('sat-name').textContent = 'Moon';
+            document.getElementById('sat-altitude').textContent = `${distance.toLocaleString()} km`;
+            document.getElementById('sat-velocity').textContent = '~3,683 km/h';
+            document.getElementById('sat-lat').textContent = 'Orbital body';
+            document.getElementById('sat-lon').textContent = 'Earth-centered';
+            document.getElementById('sat-period').textContent = '~27.3 days';
+            info.style.display = 'block';
+        }
+
         // Show satellite info
         function showSatelliteInfo(sat) {
             const info = document.getElementById('satellite-info');
@@ -790,6 +890,10 @@
             
             earth.rotation.y += 0.0001;
             atmosphere.rotation.y += 0.0001;
+
+            moonSystem.moonMesh.position.copy(getMoonPosition(simulationTime));
+            moonSystem.moonMesh.visible = showMoon;
+            moonSystem.moonOrbitLine.visible = showMoonOrbit;
             
             updateSatellites(deltaTime);
             orbitControls.update();
@@ -825,6 +929,18 @@
         // Orbit toggle
         document.getElementById('show-orbits').addEventListener('change', (e) => {
             showOrbits = e.target.checked;
+        });
+        document.getElementById('show-moon').addEventListener('change', (e) => {
+            showMoon = e.target.checked;
+        });
+        document.getElementById('show-moon-orbit').addEventListener('change', (e) => {
+            showMoonOrbit = e.target.checked;
+        });
+        document.getElementById('open-arow').addEventListener('click', () => {
+            window.open('https://www.nasa.gov/trackartemis', '_blank');
+        });
+        document.getElementById('open-artemis-live').addEventListener('click', () => {
+            window.open('https://artemislive.org/', '_blank');
         });
         
         // Initialize
