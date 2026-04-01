@@ -660,11 +660,27 @@
         }
 
         function createArtemisSystem() {
-            const geometry = new THREE.SphereGeometry(85, 12, 12);
-            const material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.userData = { type: 'artemis' };
-            celestialObjects.add(mesh);
+            const rocketGroup = new THREE.Group();
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xe6f7ff, emissive: 0x114455, shininess: 25 });
+            const accentMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00aacc, shininess: 30 });
+
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(32, 32, 180, 10), bodyMaterial);
+            const nose = new THREE.Mesh(new THREE.ConeGeometry(32, 70, 10), accentMaterial);
+            const fin1 = new THREE.Mesh(new THREE.BoxGeometry(14, 55, 4), accentMaterial);
+            const fin2 = fin1.clone();
+            const fin3 = new THREE.Mesh(new THREE.BoxGeometry(4, 55, 14), accentMaterial);
+            const fin4 = fin3.clone();
+
+            nose.position.y = 125;
+            fin1.position.set(24, -75, 0);
+            fin2.position.set(-24, -75, 0);
+            fin3.position.set(0, -75, 24);
+            fin4.position.set(0, -75, -24);
+
+            rocketGroup.add(body, nose, fin1, fin2, fin3, fin4);
+            rocketGroup.scale.setScalar(1.6);
+            rocketGroup.userData = { type: 'artemis' };
+            celestialObjects.add(rocketGroup);
 
             const points = [];
             for (let hour = 0; hour <= 240; hour += 4) {
@@ -676,7 +692,7 @@
             const pathLine = new THREE.Line(pathGeometry, pathMaterial);
             celestialObjects.add(pathLine);
 
-            return { mesh, pathLine };
+            return { mesh: rocketGroup, pathLine };
         }
 
         const artemisSystem = createArtemisSystem();
@@ -993,7 +1009,13 @@
             moonSystem.moonMesh.position.copy(getMoonPosition(simulationTime));
             moonSystem.moonMesh.visible = showMoon;
             moonSystem.moonOrbitLine.visible = showMoonOrbit;
-            artemisSystem.mesh.position.copy(getArtemisPosition(simulationTime));
+            const artemisPos = getArtemisPosition(simulationTime);
+            const artemisFuturePos = getArtemisPosition(new Date(simulationTime.getTime() + 60 * 60 * 1000));
+            artemisSystem.mesh.position.copy(artemisPos);
+            const artemisDirection = artemisFuturePos.clone().sub(artemisPos).normalize();
+            if (artemisDirection.lengthSq() > 0) {
+                artemisSystem.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), artemisDirection);
+            }
             artemisSystem.mesh.visible = showArtemis;
             artemisSystem.pathLine.visible = showArtemisPath;
             
