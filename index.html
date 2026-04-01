@@ -1004,16 +1004,17 @@
         
         function updateCameraMode() {
             if (deepSpaceMode) {
-                camera.position.set(0, 90000, 160000);
-                orbitControls.minDistance = 20000;
-                orbitControls.maxDistance = 500000;
-                orbitControls.target.set(0, 0, 0);
+                camera.position.set(0, 26000, 42000);
+                orbitControls.minDistance = 9000;
+                orbitControls.maxDistance = 120000;
+                orbitControls.target.copy(moonSystem.moonMesh.position.clone().multiplyScalar(0.35));
             } else {
                 camera.position.set(0, 15000, 25000);
                 orbitControls.minDistance = 7000;
                 orbitControls.maxDistance = 100000;
                 orbitControls.target.set(0, 0, 0);
             }
+            camera.lookAt(orbitControls.target);
             orbitControls.update();
         }
 
