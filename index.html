@@ -372,6 +372,10 @@
                 <input type="checkbox" id="show-artemis-path" checked>
                 <label for="show-artemis-path">Show Artemis Path</label>
             </div>
+            <div class="toggle-option">
+                <input type="checkbox" id="deep-space-mode">
+                <label for="deep-space-mode">Deep Space Focus</label>
+            </div>
         </div>
 
         <div class="control-group">
@@ -534,6 +538,7 @@
         let showMoonOrbit = false;
         let showArtemis = true;
         let showArtemisPath = true;
+        let deepSpaceMode = false;
         const moonDistanceKm = 384400;
         const moonRadiusKm = 1737;
         const moonOrbitTilt = THREE.MathUtils.degToRad(5.145);
@@ -601,7 +606,7 @@
         }
 
         function createMoonSystem() {
-            const moonGeometry = new THREE.SphereGeometry(moonRadiusKm * 2.8, 24, 24);
+            const moonGeometry = new THREE.SphereGeometry(moonRadiusKm * 5.5, 24, 24);
             const moonMaterial = new THREE.MeshPhongMaterial({
                 color: 0xd9d9d9,
                 emissive: 0x222222,
@@ -997,6 +1002,21 @@
             renderer.render(scene, camera);
         }
         
+        function updateCameraMode() {
+            if (deepSpaceMode) {
+                camera.position.set(0, 90000, 160000);
+                orbitControls.minDistance = 20000;
+                orbitControls.maxDistance = 500000;
+                orbitControls.target.set(0, 0, 0);
+            } else {
+                camera.position.set(0, 15000, 25000);
+                orbitControls.minDistance = 7000;
+                orbitControls.maxDistance = 100000;
+                orbitControls.target.set(0, 0, 0);
+            }
+            orbitControls.update();
+        }
+
         // Handle window resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -1039,6 +1059,10 @@
         document.getElementById('show-artemis-path').addEventListener('change', (e) => {
             showArtemisPath = e.target.checked;
         });
+        document.getElementById('deep-space-mode').addEventListener('change', (e) => {
+            deepSpaceMode = e.target.checked;
+            updateCameraMode();
+        });
         document.getElementById('open-arow').addEventListener('click', () => {
             window.open('https://www.nasa.gov/trackartemis', '_blank');
         });
@@ -1048,6 +1072,7 @@
         
         // Initialize
         await loadSatellites();
+        updateCameraMode();
         animate();
     </script>
 </body>
