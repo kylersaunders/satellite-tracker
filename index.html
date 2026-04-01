@@ -537,6 +537,7 @@
         const moonDistanceKm = 384400;
         const moonRadiusKm = 1737;
         const moonOrbitTilt = THREE.MathUtils.degToRad(5.145);
+        const deepSpaceCompression = 0.16;
         const artemisLaunchTime = new Date('2026-04-01T16:47:00Z');
         const artemisMissionDurationMs = 10 * 24 * 60 * 60 * 1000;
         
@@ -570,6 +571,10 @@
             return date.getTime() / 86400000 + 2440587.5;
         }
 
+        function compressDeepSpacePosition(vector) {
+            return vector.clone().multiplyScalar(deepSpaceCompression);
+        }
+
         function getMoonPosition(date) {
             const jd = julianDate(date);
             const d = jd - 2451543.5;
@@ -592,7 +597,7 @@
             const yh = r * (Math.sin(N) * Math.cos(v + w) + Math.cos(N) * Math.sin(v + w) * Math.cos(i));
             const zh = r * (Math.sin(v + w) * Math.sin(i));
 
-            return new THREE.Vector3(xh, zh, yh);
+            return compressDeepSpacePosition(new THREE.Vector3(xh, zh, yh));
         }
 
         function createMoonSystem() {
@@ -650,7 +655,7 @@
         }
 
         function createArtemisSystem() {
-            const geometry = new THREE.SphereGeometry(55, 12, 12);
+            const geometry = new THREE.SphereGeometry(85, 12, 12);
             const material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
             const mesh = new THREE.Mesh(geometry, material);
             mesh.userData = { type: 'artemis' };
@@ -662,7 +667,7 @@
                 points.push(getArtemisPosition(t));
             }
             const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
-            const pathMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 });
+            const pathMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.9, linewidth: 3 });
             const pathLine = new THREE.Line(pathGeometry, pathMaterial);
             celestialObjects.add(pathLine);
 
@@ -911,8 +916,8 @@
         function showArtemisInfo() {
             const info = document.getElementById('satellite-info');
             const pos = getArtemisPosition(simulationTime);
-            const distance = Math.round(pos.length());
-            const moonDistance = Math.round(pos.distanceTo(getMoonPosition(simulationTime)));
+            const distance = Math.round(pos.length() / deepSpaceCompression);
+            const moonDistance = Math.round(pos.distanceTo(getMoonPosition(simulationTime)) / deepSpaceCompression);
             document.getElementById('sat-name').textContent = 'Artemis II / Orion';
             document.getElementById('sat-altitude').textContent = `${distance.toLocaleString()} km from Earth`;
             document.getElementById('sat-velocity').textContent = 'Approx mission path';
@@ -925,7 +930,7 @@
         function showMoonInfo() {
             const info = document.getElementById('satellite-info');
             const moonPos = getMoonPosition(simulationTime);
-            const distance = Math.round(moonPos.length());
+            const distance = Math.round(moonPos.length() / deepSpaceCompression);
             document.getElementById('sat-name').textContent = 'Moon';
             document.getElementById('sat-altitude').textContent = `${distance.toLocaleString()} km`;
             document.getElementById('sat-velocity').textContent = '~3,683 km/h';
